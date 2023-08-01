@@ -5,12 +5,12 @@ import ete3
 
 
 def extract(input_absrel, output_json):
-    name = input_absrel.split('/')[-1].split('.')[0]
     attributes = None
     with open('data/Functional_categories.csv') as csv_file:
         reader = csv.DictReader(csv_file)
         for row in reader:
-            if row['File name'] == name:
+            row_id ='_'.join(input_absrel.split('.')[0].split('_')[1:])
+            if row['File name'] == row_id:
                 attributes = row
         if not attributes:
             attributes = {
@@ -28,6 +28,7 @@ def extract(input_absrel, output_json):
         pss_sum = 0
         pss_count = 0
         while not node.is_root():
+            pss_count += 1
             branch_attributes = absrel['branch attributes']['0'][node.name]
             p_value = branch_attributes['Corrected P-value']
             if p_value < .05:
@@ -36,7 +37,6 @@ def extract(input_absrel, output_json):
                     rate = float(rd[0])
                     if rate > 1:
                         pss_sum += float(rd[1])
-                        pss_count += 1
             node = node.up
         if pss_count == 0:
             pss_average = 0
