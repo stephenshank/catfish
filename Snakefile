@@ -1,6 +1,8 @@
 import os
 import csv
 
+import pandas as pd
+
 from catfish import extract
 
 
@@ -29,7 +31,7 @@ rule extract:
   run:
     extract(input[0], output[0])
 
-rule make_csv:
+rule make_full_csv:
   input:
     expand(
       'data/absrel/{name}.extract.json',
@@ -39,7 +41,7 @@ rule make_csv:
         if f[-6:] == '.fasta'
       ])
   output:
-    'data/absrel.csv'
+    'data/full_absrel.csv'
   run:
     csv_file = open(output[0], 'w')
     field_names = [
@@ -63,3 +65,23 @@ rule make_csv:
         row.update(value)
         csv_writer.writerow(row)
     csv_file.close()
+
+rule make_tip_csv:
+  input:
+    rules.make_full_csv.output[0]
+  output:
+    tip='data/tip_absrel.csv',
+    func='data/func_absrel.csv'
+  run:
+    df = pd.read_csv(input[0])
+    df['mean_psg'] = df['mean_pss'] > 0
+
+    mean_pss = df.groupby('tip')['mean_pss'].mean()
+    mean_psg = df.groupby('tip')['mean_psg'].sum() / 10
+    tip_csv = pd.concat([mean_pss, mean_psg], axis=1)
+    tip_csv.to_csv(output.tip)
+
+    mean_pss = df.groupby('functional_category')['mean_pss'].mean()
+    mean_psg = df.groupby('functional_category')['mean_psg'].sum() / 10
+    func_csv = pd.concat([mean_pss, mean_psg], axis=1)
+    func_csv.to_csv(output.func)
