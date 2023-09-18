@@ -1,9 +1,18 @@
 import os
 import csv
+import json
 
 import pandas as pd
+from statsmodels.stats.multitest import fdrcorrection
 
 from catfish import extract
+
+
+TREE_GENE_NAMES = [
+  f.split('.')[0]
+  for f in os.listdir('./data/Stephen/aBSREL_Input/')
+  if f[-6:] == '.fasta'
+]
 
 
 rule extract_fasta_names:
@@ -35,11 +44,8 @@ rule make_full_csv:
   input:
     expand(
       'data/absrel/{name}.extract.json',
-      name=[
-        f.split('.')[0]
-        for f in os.listdir('./data/Stephen/aBSREL_Input/')
-        if f[-6:] == '.fasta'
-      ])
+      name=TREE_GENE_NAMES
+    )
   output:
     'data/full_absrel.csv'
   run:
@@ -85,3 +91,33 @@ rule make_tip_csv:
     mean_psg = df.groupby('functional_category')['mean_psg'].sum() / 10
     func_csv = pd.concat([mean_pss, mean_psg], axis=1)
     func_csv.to_csv(output.func)
+
+rule bh_extraction:
+  input:
+    expand(
+      'data/absrel/{name}.ABSREL.json',
+      name=TREE_GENE_NAMES
+    )
+  output:
+    'data/bh.tsv'
+  run:
+    table = []
+    for absrel_filepath in input:
+      basename = os.path.basename(absrel_filepath.split('.')[0])
+      split_on_underscore = basename.split('_')
+      phylo_method = split_on_underscore[0]
+      gene_name = '_'.join(split_on_underscore[1:])
+      with open(absrel_filepath) as json_file:
+        absrel = json.load(json_file)
+        for branch, attributes in absrel['branch attributes']['0'].items():
+          table.append({
+            'branch': branch,
+            'phylo_method': phylo_method,
+            'gene': gene_name,
+            'pvalue': attributes['Uncorrected P-value']
+          })
+    df = pd.DataFrame(table)
+    rejected, corrected = fdrcorrection(df.pvalue)
+    df['rejected'] = rejected
+    df['qvalue'] = corrected
+    df.to_csv(output[0], sep='\t')
