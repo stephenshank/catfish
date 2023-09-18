@@ -3,3 +3,5 @@ data
 torque
 .nfs*
 __pycache__
+env
+.DS_Store
