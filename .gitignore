@@ -5,3 +5,4 @@ torque
 __pycache__
 env
 .DS_Store
+Functional_categories.csv
