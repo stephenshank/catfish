@@ -71,7 +71,7 @@ rule tip_data_rows_for_gene:
       tree=TREES
     )
   output:
-    'data/{gene}/rows.tsv'
+    'data/{gene}/rows.csv'
   run:
     functional = None
     with open(input.func) as csv_file:
@@ -89,12 +89,13 @@ rule tip_data_rows_for_gene:
     with open(input.bh) as tsv_file:
       bh_reader = csv.DictReader(tsv_file, delimiter='\t')
       for row in bh_reader:
+        value = row['rejected'] == 'TRUE'
         if row['gene'] == wildcards.gene:
           if row['tree'] in full_bh_hash:
-            full_bh_hash[row['tree']][row['branch']] = row['rejected']
+            full_bh_hash[row['tree']][row['branch']] = value
           else:
             full_bh_hash[row['tree']] = {
-              row['branch']: row['rejected']
+              row['branch']: value
             }
         
     rows = []
@@ -117,14 +118,17 @@ rule tip_data_rows_for_gene:
 rule make_full_csv:
   input:
     expand(
-      'data/{gene}/row.tsv',
+      'data/{gene}/rows.csv',
       gene=GENES
     )
   output:
     'tables/full_absrel.csv'
   run:
-    # TODO: redo with new data model!
-    pass
+    all_tables = [
+      pd.read_csv(single_gene_rows)
+      for single_gene_rows in input
+    ]
+    pd.concat(all_tables).to_csv(output[0], index=False)
 
 rule make_tip_csv:
   input:
