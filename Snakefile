@@ -5,19 +5,7 @@ import json
 import pandas as pd
 from statsmodels.stats.multitest import fdrcorrection
 
-from catfish import calculate_mean_pss
-
-
-def read_lines(input_filepath):
-  with open(input_filepath) as input_file:
-    lines = [line.strip() for line in input_file.readlines()]
-  return lines
-
-
-def read_json(input_filepath):
-  with open(input_filepath) as input_file:
-    result = json.load(input_file)
-  return result
+from catfish import *
 
 
 GENES = read_lines('tables/genes.txt')
@@ -49,11 +37,18 @@ rule bh_extraction:
         _, gene, tree, _ = absrel_filepath.split('/')
         branch_attributes = absrel['branch attributes']['0']
         for branch, attributes in branch_attributes.items():
+          rds = attributes['Rate Distributions']
           table.append({
             'branch': branch,
             'tree': tree,
             'gene': gene,
             'pvalue': attributes['Uncorrected P-value'],
+            'rate_1': rds[0][0],
+            'frac_1': rds[0][1],
+            'rate_2': None if len(rds) < 2 else rds[1][0],
+            'frac_2': None if len(rds) < 2 else rds[1][1],
+            'rate_3': None if len(rds) < 3 else rds[2][0],
+            'frac_3': None if len(rds) < 3 else rds[2][1],
             'full_adaptive_model_bl': attributes['Full adaptive model']
           })
     df = pd.DataFrame(table)
@@ -85,18 +80,7 @@ rule tip_data_rows_for_gene:
           'Functional Category Analyses': 'UNKNOWN'
         }
 
-    full_bh_hash = {}
-    with open(input.bh) as tsv_file:
-      bh_reader = csv.DictReader(tsv_file, delimiter='\t')
-      for row in bh_reader:
-        value = row['rejected'] == 'TRUE'
-        if row['gene'] == wildcards.gene:
-          if row['tree'] in full_bh_hash:
-            full_bh_hash[row['tree']][row['branch']] = value
-          else:
-            full_bh_hash[row['tree']] = {
-              row['branch']: value
-            }
+    full_bh_hash = build_bh_hash(input.bh, wildcards.gene)
         
     rows = []
     for absrel_filepath in input.absrels:
@@ -134,8 +118,8 @@ rule make_tip_csv:
   input:
     rules.make_full_csv.output[0]
   output:
-    tip='data/tip_absrel.csv',
-    func='data/func_absrel.csv'
+    tip='tables/tip_absrel.csv',
+    func='tables/func_absrel.csv'
   run:
     df = pd.read_csv(input[0])
     df['mean_psg'] = df['mean_pss'] > 0
