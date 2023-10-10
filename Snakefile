@@ -11,9 +11,22 @@ from catfish import *
 GENES = read_lines('tables/genes.txt')
 TREES = read_lines('tables/trees.txt')
 
+rule bealign:
+  input:
+    unaligned='data/{gene}/unaligned.fasta',
+    reference='data/{gene}/reference.fasta',
+  output:
+    bam='data/{gene}/codons.bam',
+    fasta='data/{gene}/codons.fasta'
+  shell:
+    '''
+      NCPU=1 bealign -r {input.reference} {input.unaligned} {output.bam}
+      bam2msa {output.bam} {output.fasta}
+    '''
+
 rule absrel:
   input:
-    alignment='data/{gene}/codons.fasta',
+    alignment=rules.bealign.output.fasta,
     tree='data/{gene}/{tree}/tree.nwk'
   output:
     'data/{gene}/{tree}/absrel.json'
