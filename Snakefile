@@ -24,12 +24,12 @@ rule bealign:
       bam2msa {output.bam} {output.fasta}
     '''
 
-rule absrel:
+rule absrel_root_to_tip:
   input:
     alignment=rules.bealign.output.fasta,
-    tree='data/{gene}/{tree}/tree.nwk'
+    tree='data/{gene}/root_to_tip/{tree}/tree.nwk'
   output:
-    'data/{gene}/{tree}/absrel.json'
+    'data/{gene}/root_to_tip/{tree}/absrel.json'
   shell:
     'mpirun -np 16 HYPHYMPI absrel --alignment {input.alignment} --tree {input.tree} --branches Foreground --output {output}'
 
@@ -146,3 +146,11 @@ rule make_tip_csv:
     mean_psg = df.groupby('functional_category')['mean_psg'].sum() / 10
     func_csv = pd.concat([mean_pss, mean_psg], axis=1)
     func_csv.to_csv(output.func)
+
+rule all_root_to_tip:
+  input:
+    expand(
+      'data/{gene}/root_to_tip/{tree}/absrel.json',
+      gene=GENES,
+      tree=TREES,
+    )
