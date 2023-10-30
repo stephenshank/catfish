@@ -10,6 +10,11 @@ from catfish import *
 
 GENES = read_lines('tables/genes.txt')
 TREES = read_lines('tables/trees.txt')
+TRAITS = ['B2P', 'M2F', 'M2F_NOEURY', 'S2E']
+
+HYPHY_ROOT = os.environ.get('HYPHY_ROOT')
+DEV_ROOT = os.path.join(HYPHY_ROOT, 'hyphy', 'hyphy-dev')
+HA_ROOT = os.path.join(HYPHY_ROOT, 'hyphy-analyses')
 
 rule bealign:
   input:
@@ -32,6 +37,42 @@ rule absrel_root_to_tip:
     'data/{gene}/root_to_tip/{tree}/absrel.json'
   shell:
     'mpirun -np 16 HYPHYMPI absrel --alignment {input.alignment} --tree {input.tree} --branches Foreground --output {output}'
+
+rule absrel:
+  input:
+    alignment=rules.bealign.output.fasta,
+    tree='data/{gene}/aBSREL/{trait}/tree.nwk'
+  output:
+    'data/{gene}/aBSREL/{trait}/absrel.json'
+  shell:
+    'mpirun -np 8 HYPHYMPI absrel --alignment {input.alignment} --tree {input.tree} --branches Foreground --output {output}'
+
+rule busted_e:
+  input:
+    alignment=rules.bealign.output.fasta,
+    tree='data/{gene}/BUSTED/{trait}/tree.nwk'
+  output:
+    'data/{gene}/BUSTED/{trait}/busted_e.json'
+  shell:
+    '%s/hyphy busted CPU=8 --alignment {input.alignment} --tree {input.tree} --branches Foreground --output {output} --error-sink Yes --starting-points 5' % DEV_ROOT
+
+rule busted_ph:
+  input:
+    alignment=rules.bealign.output.fasta,
+    tree='data/{gene}/BUSTED-PH/{trait}/tree.nwk'
+  output:
+    'data/{gene}/BUSTED-PH/{trait}/busted_e.json'
+  shell:
+    'hyphy %s/BUSTED-PH/BUSTED-PH.bf --alignment {input.alignment} --tree {input.tree} --srv No --branches Primates' % HA_ROOT
+
+rule relax:
+  input:
+    alignment=rules.bealign.output.fasta,
+    tree='data/{gene}/RELAX/{trait}/tree.nwk'
+  output:
+    'data/{gene}/RELAX/{trait}/relax.json'
+  shell:
+    'hyphy relax CPU=8 --alignment {input.alignment} --tree {input.tree} --test TEST --reference REFERENCE --output {output}'
 
 rule bh_extraction:
   input:
@@ -153,4 +194,22 @@ rule all_root_to_tip:
       'data/{gene}/root_to_tip/{tree}/absrel.json',
       gene=GENES,
       tree=TREES,
+    )
+
+rule all_hyphy:
+  input:
+    expand(
+      'data/{gene}/BUSTED/{trait}/busted_e.json',
+      gene=GENES,
+      trait=TRAITS,
+    ),
+    expand(
+      'data/{gene}/aBSREL/{trait}/absrel.json',
+      gene=GENES,
+      trait=TRAITS,
+    ),
+    expand(
+      'data/{gene}/RELAX/{trait}/relax.json',
+      gene=GENES,
+      trait=TRAITS,
     )
