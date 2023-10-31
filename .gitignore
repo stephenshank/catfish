@@ -1,6 +1,6 @@
 data
 .snakemake
-torque
+torque*
 .nfs*
 __pycache__
 env
