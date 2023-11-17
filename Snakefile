@@ -43,44 +43,48 @@ rule absrel:
     alignment=rules.bealign.output.fasta,
     tree='data/{gene}/aBSREL/{trait}/tree.nwk'
   output:
-    json='data/{gene}/aBSREL/{trait}/absrel.json',
+    json='data/{gene}/aBSREL/{trait}/absrel.json'
+  params:
     stdout='data/{gene}/aBSREL/{trait}/stdout.txt',
     stderr='data/{gene}/aBSREL/{trait}/stderr.txt'
   shell:
-    'mpirun -np 8 HYPHYMPI absrel --alignment {input.alignment} --tree {input.tree} --branches Foreground --output {output.json} > {output.stdout} 2> {output.stderr}'
+    'mpirun -np 8 HYPHYMPI absrel --alignment {input.alignment} --tree {input.tree} --branches Foreground --output {output.json} > {params.stdout} 2> {params.stderr}'
 
 rule busted_e:
   input:
     alignment=rules.bealign.output.fasta,
     tree='data/{gene}/BUSTED/{trait}/tree.nwk'
   output:
-    json='data/{gene}/BUSTED/{trait}/busted_e.json',
+    json='data/{gene}/BUSTED/{trait}/busted_e.json'
+  params:
     stdout='data/{gene}/aBSREL/{trait}/stdout.txt',
     stderr='data/{gene}/aBSREL/{trait}/stderr.txt'
   shell:
-    '%s/hyphy busted CPU=8 --alignment {input.alignment} --tree {input.tree} --branches Foreground --output {output.json} --error-sink Yes --starting-points 5 > {output.stdout} 2> {output.stderr}' % DEV_ROOT
+    '%s/hyphy busted CPU=8 --alignment {input.alignment} --tree {input.tree} --branches Foreground --output {output.json} --error-sink Yes --starting-points 5 > {params.stdout} 2> {params.stderr}' % DEV_ROOT
 
 rule busted_ph:
   input:
     alignment=rules.bealign.output.fasta,
     tree='data/{gene}/BUSTED-PH/{trait}/tree.nwk'
   output:
-    json='data/{gene}/BUSTED-PH/{trait}/busted_e.json',
+    json='data/{gene}/BUSTED-PH/{trait}/busted_e.json'
+  params:
     stdout='data/{gene}/aBSREL/{trait}/stdout.txt',
     stderr='data/{gene}/aBSREL/{trait}/stderr.txt'
   shell:
-    'hyphy %s/BUSTED-PH/BUSTED-PH.bf --alignment {input.alignment} --tree {input.tree} --srv No --branches Primates > {output.stdout} 2> {output.stderr}' % HA_ROOT
+    'hyphy %s/BUSTED-PH/BUSTED-PH.bf --alignment {input.alignment} --tree {input.tree} --srv No --branches Primates > {params.stdout} 2> {params.stderr}' % HA_ROOT
 
 rule relax:
   input:
     alignment=rules.bealign.output.fasta,
     tree='data/{gene}/RELAX/{trait}/tree.nwk'
   output:
-    json='data/{gene}/RELAX/{trait}/relax.json',
+    json='data/{gene}/RELAX/{trait}/relax.json'
+  params:
     stdout='data/{gene}/aBSREL/{trait}/stdout.txt',
     stderr='data/{gene}/aBSREL/{trait}/stderr.txt'
   shell:
-    'hyphy relax CPU=8 --alignment {input.alignment} --tree {input.tree} --test TEST --reference REFERENCE --output {output.json} > {output.stdout} 2> {output.stderr}'
+    'hyphy relax CPU=8 --alignment {input.alignment} --tree {input.tree} --test TEST --reference REFERENCE --output {output.json} > {params.stdout} 2> {params.stderr}'
 
 rule bh_extraction:
   input:
