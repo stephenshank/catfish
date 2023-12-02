@@ -10,11 +10,19 @@ from catfish import *
 
 GENES = read_lines('tables/genes.txt')
 TREES = read_lines('tables/trees.txt')
-TRAITS = ['B2P', 'M2F', 'M2F_NOEURY', 'S2E']
+TRAITS = ['B2P', 'M2F', 'S2E']
 
 HYPHY_ROOT = os.environ.get('HYPHY_ROOT')
 DEV_ROOT = os.path.join(HYPHY_ROOT, 'hyphy', 'hyphy-dev')
 HA_ROOT = os.path.join(HYPHY_ROOT, 'hyphy-analyses')
+
+rule genes:
+  input:
+    "tables/non-dupes.tsv"
+  output:
+    "tables.genes.txt"
+  shell:
+    "tail -n + 2 {input} | cut -f 1 > {output}"
 
 rule bealign:
   input:
@@ -33,10 +41,13 @@ rule absrel_root_to_tip:
   input:
     alignment=rules.bealign.output.fasta,
     tree='data/{gene}/root_to_tip/{tree}/tree.nwk'
+  params:
+    stdout='data/{gene}/root_to_tip/{tree}/stdout.txt',
+    stderr='data/{gene}/root_to_tip/{tree}/stderr.txt'
   output:
     'data/{gene}/root_to_tip/{tree}/absrel.json'
   shell:
-    'mpirun -np 16 HYPHYMPI absrel --alignment {input.alignment} --tree {input.tree} --branches Foreground --output {output}'
+    'mpirun -np 8 HYPHYMPI absrel --alignment {input.alignment} --tree {input.tree} --branches Foreground --output {output}> {params.stdout} 2> {params.stderr}'
 
 rule absrel:
   input:
