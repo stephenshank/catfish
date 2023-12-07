@@ -3,6 +3,7 @@ import csv
 import json
 
 import pandas as pd
+from Bio import SeqIO
 from statsmodels.stats.multitest import fdrcorrection
 
 from catfish import *
@@ -36,6 +37,21 @@ rule bealign:
       NCPU=1 bealign -r {input.reference} {input.unaligned} {output.bam}
       bam2msa {output.bam} {output.fasta}
     '''
+
+rule codon_msa:
+  input:
+    'data/{gene}/unaligned.fasta',
+  output:
+    qced_nucleotides='data/{gene}/unaligned.fasta_nuc.fas',
+    unaligned_protein='data/{gene}/unaligned.fasta_protein.fas',
+    aligned_protein='data/{gene}/aligned.fasta_protein.fas',
+    codons='data/{gene}/codon_msa.fasta'
+  shell:
+    '''
+      hyphy %s/codon-msa/pre-msa.bf --input {input}
+      mafft {output.unaligned_protein} > {output.aligned_protein}
+      hyphy %s/codon-msa/post-msa.bf --protein-msa {output.aligned_protein} --nucleotide-sequences {output.qced_nucleotides} --output {output.codons}
+    ''' % (HA_ROOT, HA_ROOT)
 
 rule absrel_root_to_tip:
   input:
