@@ -1,6 +1,7 @@
 import os
 import csv
 import json
+import sys
 
 import pandas as pd
 from Bio import SeqIO
@@ -17,106 +18,41 @@ HYPHY_ROOT = os.environ.get('HYPHY_ROOT')
 DEV_ROOT = os.path.join(HYPHY_ROOT, 'hyphy', 'hyphy-dev')
 HA_ROOT = os.path.join(HYPHY_ROOT, 'hyphy-analyses')
 
-rule genes:
-  input:
-    "tables/non-dupes.tsv"
-  output:
-    "tables.genes.txt"
-  shell:
-    "tail -n + 2 {input} | cut -f 1 > {output}"
+functional_categories = [
+  'UNCLASSIFIED',
+  'GO:0009987',
+  'GO:0065007',
+  'GO:0032502',
+  'GO:0032501',
+  'GO:0008152',
+  'GO:0051179',
+  'GO:0050896',
+  'GO:0042592',
+  'GO:0022414',
+  'transmembrane transport',
+  'GO:0002376',
+  'GO:0098772',
+  'GO:0005488',
+  'GO:0040011',
+  'GO:0140110',
+  'GO:0005198',
+  'GO:0003824',
+  'GO:0005215',
+  'GO:0044419',
+  'GO:0048511',
+  'GO:0040007',
+  'GO:0098754',
+  'GO:0000003',
+  'signaling',
+  'GO:0043473',
+  'locomotion'
+]
 
-rule bealign:
-  input:
-    unaligned='data/{gene}/unaligned.fasta',
-    reference='data/{gene}/reference.fasta',
-  output:
-    bam='data/{gene}/codons.bam',
-    fasta='data/{gene}/codons.fasta'
-  shell:
-    '''
-      NCPU=1 bealign -r {input.reference} {input.unaligned} {output.bam}
-      bam2msa {output.bam} {output.fasta}
-    '''
-
-rule codon_msa:
-  input:
-    'data/{gene}/unaligned.fasta',
-  output:
-    qced_nucleotides='data/{gene}/unaligned.fasta_nuc.fas',
-    unaligned_protein='data/{gene}/unaligned.fasta_protein.fas',
-    aligned_protein='data/{gene}/aligned.fasta_protein.fas',
-    codons='data/{gene}/codon_msa.fasta'
-  shell:
-    '''
-      hyphy %s/codon-msa/pre-msa.bf --input {input}
-      mafft {output.unaligned_protein} > {output.aligned_protein}
-      hyphy %s/codon-msa/post-msa.bf --protein-msa {output.aligned_protein} --nucleotide-sequences {output.qced_nucleotides} --output {output.codons}
-    ''' % (HA_ROOT, HA_ROOT)
-
-rule absrel_root_to_tip:
-  input:
-    alignment=rules.bealign.output.fasta,
-    tree='data/{gene}/root_to_tip/{tree}/tree.nwk'
-  params:
-    stdout='data/{gene}/root_to_tip/{tree}/stdout.txt',
-    stderr='data/{gene}/root_to_tip/{tree}/stderr.txt'
-  output:
-    'data/{gene}/root_to_tip/{tree}/absrel.json'
-  shell:
-    'mpirun -np 8 HYPHYMPI absrel --alignment {input.alignment} --tree {input.tree} --branches Foreground --output {output}> {params.stdout} 2> {params.stderr}'
-
-rule absrel:
-  input:
-    alignment=rules.bealign.output.fasta,
-    tree='data/{gene}/aBSREL/{trait}/tree.nwk'
-  output:
-    json='data/{gene}/aBSREL/{trait}/absrel.json'
-  params:
-    stdout='data/{gene}/aBSREL/{trait}/stdout.txt',
-    stderr='data/{gene}/aBSREL/{trait}/stderr.txt'
-  shell:
-    'mpirun -np 8 HYPHYMPI absrel --alignment {input.alignment} --tree {input.tree} --branches Foreground --output {output.json} > {params.stdout} 2> {params.stderr}'
-
-rule busted_e:
-  input:
-    alignment=rules.bealign.output.fasta,
-    tree='data/{gene}/BUSTED/{trait}/tree.nwk'
-  output:
-    json='data/{gene}/BUSTED/{trait}/busted_e.json'
-  params:
-    stdout='data/{gene}/aBSREL/{trait}/stdout.txt',
-    stderr='data/{gene}/aBSREL/{trait}/stderr.txt'
-  shell:
-    '%s/hyphy busted CPU=8 --alignment {input.alignment} --tree {input.tree} --branches Foreground --output {output.json} --error-sink Yes --starting-points 5 > {params.stdout} 2> {params.stderr}' % DEV_ROOT
-
-rule busted_ph:
-  input:
-    alignment=rules.bealign.output.fasta,
-    tree='data/{gene}/BUSTED-PH/{trait}/tree.nwk'
-  output:
-    json='data/{gene}/BUSTED-PH/{trait}/busted_e.json'
-  params:
-    stdout='data/{gene}/aBSREL/{trait}/stdout.txt',
-    stderr='data/{gene}/aBSREL/{trait}/stderr.txt'
-  shell:
-    'hyphy %s/BUSTED-PH/BUSTED-PH.bf --alignment {input.alignment} --tree {input.tree} --srv No --branches Primates > {params.stdout} 2> {params.stderr}' % HA_ROOT
-
-rule relax:
-  input:
-    alignment=rules.bealign.output.fasta,
-    tree='data/{gene}/RELAX/{trait}/tree.nwk'
-  output:
-    json='data/{gene}/RELAX/{trait}/relax.json'
-  params:
-    stdout='data/{gene}/aBSREL/{trait}/stdout.txt',
-    stderr='data/{gene}/aBSREL/{trait}/stderr.txt'
-  shell:
-    'hyphy relax CPU=8 --alignment {input.alignment} --tree {input.tree} --test TEST --reference REFERENCE --output {output.json} > {params.stdout} 2> {params.stderr}'
 
 rule bh_extraction:
   input:
     expand(
-      'data/{gene}/{tree}/absrel.json',
+      'data/{gene}/root_to_tip/{tree}/absrel.json',
       gene=GENES,
       tree=TREES
     )
@@ -126,8 +62,13 @@ rule bh_extraction:
     table = []
     for absrel_filepath in input:
       with open(absrel_filepath) as json_file:
-        absrel = json.load(json_file)
-        _, gene, tree, _ = absrel_filepath.split('/')
+        try:
+          absrel = json.load(json_file)
+        except:
+          with open('error.txt', 'w') as f:
+            f.write('could not load %s' % absrel_filepath)
+          sys.exit(1)
+        _, gene, _, tree, _ = absrel_filepath.split('/')
         branch_attributes = absrel['branch attributes']['0']
         for branch, attributes in branch_attributes.items():
           rds = attributes['Rate Distributions']
@@ -153,9 +94,9 @@ rule bh_extraction:
 rule tip_data_rows_for_gene:
   input:
     bh=rules.bh_extraction.output[0],
-    func='tables/Functional_categories.csv',
+    func='tables/function.tsv',
     absrels=expand(
-      'data/{{gene}}/{tree}/absrel.json',
+      'data/{{gene}}/root_to_tip/{tree}/absrel.json',
       tree=TREES
     )
   output:
@@ -163,32 +104,29 @@ rule tip_data_rows_for_gene:
   run:
     functional = None
     with open(input.func) as csv_file:
-      func_reader = csv.DictReader(csv_file)
+      func_reader = csv.DictReader(csv_file, delimiter='\t')
       for row in func_reader:
-        if row['File name'] == wildcards.gene:
-          functional = row
-      if not functional:
-        functional = {
-          'Functional Category': 'UNKNOWN',
-          'Functional Category Analyses': 'UNKNOWN'
-        }
+        if row['Gene_name'] == wildcards.gene:
+          functional = {
+            fc: row[fc]
+            for fc in functional_categories
+          }
 
     full_bh_hash = build_bh_hash(input.bh, wildcards.gene)
         
     rows = []
     for absrel_filepath in input.absrels:
-      _, _, tree, _ = absrel_filepath.split('/')
+      _, _, _, tree, _ = absrel_filepath.split('/')
       absrel = read_json(absrel_filepath)
       all_mean_pss = calculate_mean_pss(absrel, full_bh_hash[tree])
       for tip, mean_pss in all_mean_pss.items():
-        rows.append({
+        row = {
           'gene': wildcards.gene,
           'tip': tip,
-          'functional_category': functional['Functional Category'],
-          'functional_category_analyses': functional['Functional Category Analyses'],
           'mean_pss': mean_pss,
           'tree': tree
-        })
+        }
+        rows.append({**row, **functional})
     pd.DataFrame(rows).to_csv(output[0], index=False)
 
 
@@ -211,44 +149,13 @@ rule make_tip_csv:
   input:
     rules.make_full_csv.output[0]
   output:
-    tip='tables/tip_absrel.csv',
-    func='tables/func_absrel.csv'
+    'tables/func_absrel.csv'
   run:
     df = pd.read_csv(input[0])
     df['mean_psg'] = df['mean_pss'] > 0
 
-    mean_pss = df.groupby('tip')['mean_pss'].mean()
-    mean_psg = df.groupby('tip')['mean_psg'].sum() / 10
-    tip_csv = pd.concat([mean_pss, mean_psg], axis=1)
-    tip_csv.to_csv(output.tip)
-
-    mean_pss = df.groupby('functional_category')['mean_pss'].mean()
-    mean_psg = df.groupby('functional_category')['mean_psg'].sum() / 10
-    func_csv = pd.concat([mean_pss, mean_psg], axis=1)
-    func_csv.to_csv(output.func)
-
-rule all_root_to_tip:
-  input:
-    expand(
-      'data/{gene}/root_to_tip/{tree}/absrel.json',
-      gene=GENES,
-      tree=TREES,
-    )
-
-rule all_hyphy:
-  input:
-    expand(
-      'data/{gene}/BUSTED/{trait}/busted_e.json',
-      gene=GENES,
-      trait=TRAITS,
-    ),
-    expand(
-      'data/{gene}/aBSREL/{trait}/absrel.json',
-      gene=GENES,
-      trait=TRAITS,
-    ),
-    expand(
-      'data/{gene}/RELAX/{trait}/relax.json',
-      gene=GENES,
-      trait=TRAITS,
-    )
+    all_fc_columns = []
+    for fc in functional_categories:
+      subset = df.loc[df[fc]]
+      mean_pss = subset.groupby('tip')['mean_pss'].mean()
+      all_fc_columns.append(mean_pss)

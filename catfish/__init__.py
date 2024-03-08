@@ -34,7 +34,11 @@ def build_bh_hash(bh_tsv_filepath, gene):
 
 
 def calculate_mean_pss(absrel, bh_hash):
-    tree = ete3.Tree(absrel['input']['trees']['0'] + ';', format=8)    
+    try:
+        tree = ete3.Tree(absrel['input']['trees']['0'] + ';', format=8)
+    except:
+        print('ERROR PARSING:')
+        print(absrel['input']['trees']['0'])
     tip_hash = {}
     for leaf in tree.get_leaves():
         node = leaf
