@@ -149,13 +149,21 @@ rule make_tip_csv:
   input:
     rules.make_full_csv.output[0]
   output:
-    'tables/func_absrel.csv'
+    pss='tables/pss-functional.csv',
+    psg='tables/psg-functional.csv'
   run:
     df = pd.read_csv(input[0])
     df['mean_psg'] = df['mean_pss'] > 0
 
-    all_fc_columns = []
+    all_pss_columns = []
+    all_psg_columns = []
     for fc in functional_categories:
       subset = df.loc[df[fc]]
-      mean_pss = subset.groupby('tip')['mean_pss'].mean()
-      all_fc_columns.append(mean_pss)
+      mean_pss = subset.groupby('tip')['mean_pss'].mean().rename(fc)
+      mean_psg = (subset.groupby('tip')['mean_psg'].sum() / 10).rename(fc)
+      all_pss_columns.append(mean_pss)
+      all_psg_columns.append(mean_psg)
+    full_pss = pd.concat(all_pss_columns, axis=1)
+    full_psg = pd.concat(all_psg_columns, axis=1)
+    full_pss.to_csv(output.pss)
+    full_psg.to_csv(output.psg)
