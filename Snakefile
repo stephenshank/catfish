@@ -49,6 +49,16 @@ functional_categories = [
 ]
 
 
+rule extract_absrel_tree:
+  input:
+    'data/{gene}/root_to_tip/{tree}/absrel.json'
+  output:
+    'data/{gene}/root_to_tip/{tree}/tree.new'
+  shell:
+    """
+      jq '.input.trees."0"' {input} > {output}
+    """
+
 rule bh_extraction:
   input:
     expand(
